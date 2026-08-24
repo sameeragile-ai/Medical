@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Trash2, Package } from "lucide-react";
+import { Search, Trash2, Package, X } from "lucide-react";
 import { Badge, EmptyState, SortHeader } from "./ui";
 import { fmtMoney } from "@/lib/format";
 
@@ -49,7 +49,17 @@ export default function MedicineTable({ products, onDelete }) {
       <div style={{ padding: 18, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid var(--border-soft)" }}>
         <div style={{ position: "relative", flex: "1 1 220px" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted-2)" }} />
-          <input className="input" style={{ paddingLeft: 34 }} placeholder="Search medicine or brand…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input" style={{ paddingLeft: 34, paddingRight: q ? 34 : 13 }} placeholder="Search medicine or brand…" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && (
+            <button
+              type="button"
+              onClick={() => setQ("")}
+              aria-label="Clear search"
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "var(--muted-2)", padding: 4 }}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <select className="select" style={{ width: "auto" }} value={brand} onChange={(e) => setBrand(e.target.value)}>
           {brands.map((b) => (
