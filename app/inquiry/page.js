@@ -14,6 +14,7 @@ export default function InquiryPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [toasts, setToasts] = useState([]);
 
@@ -57,6 +58,37 @@ export default function InquiryPage() {
     }
   };
 
+  const updateInquiry = async (payload) => {
+    try {
+      const res = await fetch(`/api/inquiries/${editing.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) return false;
+      const updated = await res.json();
+      setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setEditing(null);
+      pushToast(`Inquiry updated — ${updated.invoice}`);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const deleteInquiry = async (inquiry) => {
+    if (!window.confirm(`Delete inquiry ${inquiry.invoice}? This cannot be undone.`)) return;
+    setInquiries((prev) => prev.filter((i) => i.id !== inquiry.id));
+    try {
+      const res = await fetch(`/api/inquiries/${inquiry.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      pushToast(`Inquiry deleted — ${inquiry.invoice}`);
+    } catch {
+      pushToast("Couldn't delete — please refresh and try again.");
+      load();
+    }
+  };
+
   const todayCount = inquiries.filter((i) => (i.date || "").slice(0, 10) === todayISO()).length;
 
   return (
@@ -85,11 +117,12 @@ export default function InquiryPage() {
             <Loader2 size={20} className="animate-spin" color="var(--primary)" />
           </div>
         ) : (
-          <InquiryTable inquiries={inquiries} onView={setViewing} />
+          <InquiryTable inquiries={inquiries} onView={setViewing} onEdit={setEditing} onDelete={deleteInquiry} />
         )}
       </div>
 
       <InquiryFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSave={addInquiry} products={products} />
+      <InquiryFormDrawer open={Boolean(editing)} onClose={() => setEditing(null)} onSave={updateInquiry} products={products} editing={editing} />
       <InquiryDetailModal inquiry={viewing} onClose={() => setViewing(null)} />
     </div>
   );

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Trash2, Package, X } from "lucide-react";
+import { Search, Trash2, Package, X, Pencil } from "lucide-react";
 import { Badge, EmptyState, SortHeader } from "./ui";
 import { fmtMoney } from "@/lib/format";
 
 const PAGE_SIZE = 8;
 
-export default function MedicineTable({ products, onDelete }) {
+export default function MedicineTable({ products, onEdit, onDelete }) {
   const [q, setQ] = useState("");
   const [brand, setBrand] = useState("all");
   const [stock, setStock] = useState("all");
@@ -102,7 +102,10 @@ export default function MedicineTable({ products, onDelete }) {
                   <td className="font-mono">{fmtMoney(p.price)}</td>
                   <td>{p.dosage ? `${p.dosage} mg` : "—"}</td>
                   <td style={{ textAlign: "right" }}>
-                    <button className="icon-btn" onClick={() => onDelete(p.id)} title="Remove"><Trash2 size={14} /></button>
+                    <div style={{ display: "inline-flex", gap: 6 }}>
+                      <button className="icon-btn" onClick={() => onEdit(p)} title="Edit medicine"><Pencil size={14} /></button>
+                      <button className="icon-btn" onClick={() => onDelete(p.id)} title="Remove"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}

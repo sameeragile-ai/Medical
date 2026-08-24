@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Users, X } from "lucide-react";
+import { Search, Eye, Users, X, Pencil, Trash2 } from "lucide-react";
 import { Badge, EmptyState, SortHeader } from "./ui";
 import { fmtDate, fmtMoney } from "@/lib/format";
 
@@ -13,7 +13,7 @@ const FIELD_MAP = {
   value: "value",
 };
 
-export default function InquiryTable({ inquiries, onView }) {
+export default function InquiryTable({ inquiries, onView, onEdit, onDelete }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState({ field: "date", dir: "desc" });
@@ -119,7 +119,11 @@ export default function InquiryTable({ inquiries, onView }) {
                     ) : "—"}
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <button className="icon-btn" onClick={() => onView(r)} title="View details"><Eye size={14} /></button>
+                    <div style={{ display: "inline-flex", gap: 6 }}>
+                      <button className="icon-btn" onClick={() => onView(r)} title="View details"><Eye size={14} /></button>
+                      <button className="icon-btn" onClick={() => onEdit(r)} title="Edit inquiry"><Pencil size={14} /></button>
+                      <button className="icon-btn" onClick={() => onDelete(r)} title="Delete inquiry"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}

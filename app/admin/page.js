@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const pushToast = (msg) => {
@@ -53,6 +54,28 @@ export default function AdminPage() {
       return true;
     } catch (error) {
       pushToast(error?.message || "Couldn't save this medicine.");
+      return false;
+    }
+  };
+
+  const updateProduct = async (payload) => {
+    try {
+      const res = await fetch(`/api/products/${editing.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pushToast(data.error || "Couldn't update this medicine.");
+        return false;
+      }
+      setProducts((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+      setEditing(null);
+      pushToast(`${data.name} updated`);
+      return true;
+    } catch (error) {
+      pushToast(error?.message || "Couldn't update this medicine.");
       return false;
     }
   };
@@ -101,11 +124,12 @@ export default function AdminPage() {
             <Loader2 size={20} className="animate-spin" color="var(--primary)" />
           </div>
         ) : (
-          <MedicineTable products={products} onDelete={removeProduct} />
+          <MedicineTable products={products} onEdit={setEditing} onDelete={removeProduct} />
         )}
       </div>
 
       <MedicineFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSave={addProduct} />
+      <MedicineFormDrawer open={Boolean(editing)} onClose={() => setEditing(null)} onSave={updateProduct} editing={editing} />
     </div>
   );
 }

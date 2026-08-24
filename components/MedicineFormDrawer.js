@@ -6,18 +6,29 @@ import { FieldLabel } from "./ui";
 
 const BLANK = { name: "", quantity: "", brand: "", price: "", dosage: "" };
 
-export default function MedicineFormDrawer({ open, onClose, onSave }) {
+export default function MedicineFormDrawer({ open, onClose, onSave, editing }) {
   const [form, setForm] = useState(BLANK);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const isEdit = Boolean(editing);
 
   useEffect(() => {
     if (open) {
-      setForm(BLANK);
+      setForm(
+        editing
+          ? {
+              name: editing.name || "",
+              brand: editing.brand || "",
+              quantity: editing.quantity ?? "",
+              price: editing.price ?? "",
+              dosage: editing.dosage ?? "",
+            }
+          : BLANK
+      );
       setError("");
       setSaving(false);
     }
-  }, [open]);
+  }, [open, editing]);
 
   if (!open) return null;
 
@@ -47,8 +58,8 @@ export default function MedicineFormDrawer({ open, onClose, onSave }) {
       <div className="drawer">
         <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border-soft)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>Add medicine</div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Add a new item to your inventory</div>
+            <div className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? "Edit medicine" : "Add medicine"}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{isEdit ? `Update ${editing.name}` : "Add a new item to your inventory"}</div>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
@@ -88,7 +99,7 @@ export default function MedicineFormDrawer({ open, onClose, onSave }) {
         <div style={{ padding: 20, borderTop: "1px solid var(--border-soft)", display: "flex", gap: 10 }}>
           <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={submit} disabled={saving}>
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Save medicine
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} {isEdit ? "Save changes" : "Save medicine"}
           </button>
         </div>
       </div>

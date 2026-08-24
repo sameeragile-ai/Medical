@@ -23,22 +23,43 @@ const blankForm = () => ({
   imageData: null,
 });
 
-export default function InquiryFormDrawer({ open, onClose, onSave, products }) {
+export default function InquiryFormDrawer({ open, onClose, onSave, products, editing }) {
   const [form, setForm] = useState(blankForm());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [imgPreview, setImgPreview] = useState(null);
   const fileRef = useRef(null);
   const today = todayISO();
+  const isEdit = Boolean(editing);
 
   useEffect(() => {
     if (open) {
-      setForm(blankForm());
+      setForm(
+        editing
+          ? {
+              customerName: editing.customer_name || "",
+              patientStatus: editing.patient_status || "New",
+              productId: editing.product_id || "",
+              productName: editing.product_name || "",
+              address: editing.address || "",
+              prescriber: editing.prescriber || "",
+              drCode: editing.dr_code || "",
+              contactPrimary: editing.contact_primary || "",
+              contactAlt1: editing.contact_alt1 || "",
+              contactAlt2: editing.contact_alt2 || "",
+              salesRep: editing.sales_rep || "",
+              qty: editing.qty ?? 1,
+              value: editing.value ?? 0,
+              dosageMonths: editing.dosage_months ?? 1,
+              imageData: editing.image_data || null,
+            }
+          : blankForm()
+      );
       setError("");
-      setImgPreview(null);
+      setImgPreview(editing ? editing.image_data || null : null);
       setSaving(false);
     }
-  }, [open]);
+  }, [open, editing]);
 
   if (!open) return null;
 
@@ -94,8 +115,8 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products }) {
       <div className="drawer" style={{ maxWidth: 540 }}>
         <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border-soft)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>New patient inquiry</div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Log a prescription-based sale</div>
+            <div className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? "Edit patient inquiry" : "New patient inquiry"}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{isEdit ? `Update ${editing.invoice}` : "Log a prescription-based sale"}</div>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
@@ -216,7 +237,7 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products }) {
         <div style={{ padding: 20, borderTop: "1px solid var(--border-soft)", display: "flex", gap: 10 }}>
           <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={submit} disabled={saving}>
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Record inquiry
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} {isEdit ? "Save changes" : "Record inquiry"}
           </button>
         </div>
       </div>
