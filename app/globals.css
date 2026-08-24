@@ -135,6 +135,8 @@ table.data-table { width: 100%; border-collapse: separate; border-spacing: 0; mi
 
 .overlay { position: fixed; inset: 0; background: rgba(16,27,34,0.42); z-index: 40; }
 .overlay.fade-in { animation: fadeUp .2s ease both; }
+.overlay-soft { position: fixed; inset: 0; background: rgba(16,27,34,0.12); z-index: 40; }
+.overlay-soft.fade-in { animation: fadeUp .2s ease both; }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: 100%; max-width: 480px;
   background: var(--bg); z-index: 50; box-shadow: -12px 0 40px -12px rgba(16,27,34,0.25);
@@ -145,6 +147,7 @@ table.data-table { width: 100%; border-collapse: separate; border-spacing: 0; mi
 .modal-card {
   background: var(--surface); border-radius: 18px; max-width: 560px; width: 100%;
   max-height: 88vh; overflow: auto; box-shadow: 0 24px 60px -16px rgba(16,27,34,0.3);
+  z-index: 50;
 }
 
 .toast {
