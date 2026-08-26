@@ -1,16 +1,7 @@
-import { Suspense } from "react";
-import LoginForm from "@/components/LoginForm";
+import { redirect } from "next/navigation";
 
-export default function InquiryLoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm
-        role="inquiry"
-        endpoint="/api/auth/inquiry"
-        title="Inquiry desk sign in"
-        subtitle="Enter the sales team password to log patient inquiries."
-        fallbackPath="/inquiry"
-      />
-    </Suspense>
-  );
+export default async function InquiryLoginPage({ searchParams }) {
+  const params = await searchParams;
+  const next = params?.next ? `?next=${encodeURIComponent(params.next)}` : "";
+  redirect(`/admin/login${next}`);
 }

@@ -8,12 +8,8 @@ export default function NavBar({ active }) {
   const router = useRouter();
 
   const logout = async () => {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: active }),
-    });
-    router.push(active === "admin" ? "/admin/login" : "/inquiry/login");
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/admin/login");
     router.refresh();
   };
 

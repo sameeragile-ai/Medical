@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Plus, AlertTriangle, Upload, FileText, Calendar, MapPin, Stethoscope, Phone, Loader2, Search, Minus } from "lucide-react";
+import { X, Plus, AlertTriangle, Upload, FileText, Calendar, MapPin, Stethoscope, Phone, Loader2, Search, Minus, History } from "lucide-react";
 import { FieldLabel } from "./ui";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
 import { focusNextOnEnter } from "@/lib/focusNav";
@@ -148,7 +148,88 @@ function ProductChip({ item, onQtyChange, onRemove }) {
   );
 }
 
-export default function InquiryFormDrawer({ open, onClose, onSave, products, editing }) {
+// One row per returning customer (contact number), keeping only their most
+// recent inquiry so autofill uses their latest known details.
+function pastCustomers(inquiries) {
+  const byContact = new Map();
+  for (const inq of inquiries || []) {
+    const key = (inq.contact_primary || "").trim() || inq.customer_name;
+    if (!key) continue;
+    const existing = byContact.get(key);
+    if (!existing || new Date(inq.created_at || inq.date) > new Date(existing.created_at || existing.date)) {
+      byContact.set(key, inq);
+    }
+  }
+  return Array.from(byContact.values());
+}
+
+// Search past inquiries by name or phone; picking one autofills the patient
+// details below (still editable) so only the new medicines need adding.
+function ReturningPatientPicker({ inquiries, onPick }) {
+  const [term, setTerm] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const candidates = useMemo(() => pastCustomers(inquiries), [inquiries]);
+  const matches = useMemo(() => {
+    const needle = term.trim().toLowerCase();
+    if (!needle) return [];
+    return candidates
+      .filter(
+        (c) =>
+          (c.customer_name || "").toLowerCase().includes(needle) ||
+          (c.contact_primary || "").includes(needle)
+      )
+      .slice(0, 6);
+  }, [candidates, term]);
+
+  if (!candidates.length) return null;
+
+  return (
+    <div style={{ position: "relative", marginBottom: 16 }}>
+      <FieldLabel><History size={12} style={{ display: "inline", marginRight: 2 }} />Returning patient? Search by name or phone</FieldLabel>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--muted-2)" }} />
+        <input
+          className="input"
+          style={{ paddingLeft: 30 }}
+          placeholder="Type name or phone number…"
+          value={term}
+          onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+        />
+      </div>
+      {open && matches.length > 0 && (
+        <div
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5,
+            background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10,
+            boxShadow: "0 10px 24px -8px rgba(16,27,34,0.25)", maxHeight: 220, overflowY: "auto",
+          }}
+        >
+          {matches.map((c) => (
+            <div
+              key={c.id}
+              onMouseDown={(e) => { e.preventDefault(); onPick(c); setTerm(""); setOpen(false); }}
+              style={{ padding: "9px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 }}
+              className="dropdown-row"
+            >
+              <span style={{ fontWeight: 600 }}>{c.customer_name}</span>
+              <span className="font-mono" style={{ color: "var(--muted)" }}>{c.contact_primary}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && term && matches.length === 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--muted)" }}>
+          No matching past patient.
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function InquiryFormDrawer({ open, onClose, onSave, products, editing, inquiries }) {
   const [form, setForm] = useState(blankForm());
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
@@ -235,6 +316,23 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
     setFieldErrors((fe) => ({ ...fe, items: "" }));
   };
 
+  const applyPastPatient = (past) => {
+    setForm((f) => ({
+      ...f,
+      customerName: past.customer_name || "",
+      careOf: past.care_of || "",
+      patientStatus: "Old",
+      address: past.address || "",
+      prescriber: past.prescriber || "",
+      drCode: past.dr_code || "",
+      contactPrimary: past.contact_primary || "",
+      contactAlt1: past.contact_alt1 || "",
+      contactAlt2: past.contact_alt2 || "",
+      salesRep: past.sales_rep || f.salesRep,
+    }));
+    setFieldErrors({});
+  };
+
   const removeItem = (productId) => setItems((prev) => prev.filter((i) => i.productId !== productId));
 
   const setItemQty = (productId, qty) =>
@@ -289,6 +387,8 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
             <span className="label-tag"><FileText size={13} /> Invoice auto-assigned on save</span>
             <span className="label-tag"><Calendar size={13} /> {fmtDate(today)}</span>
           </div>
+
+          {!isEdit && <ReturningPatientPicker inquiries={inquiries} onPick={applyPastPatient} />}
 
           <div style={{ marginBottom: 16 }}>
             <FieldLabel required>Customer name</FieldLabel>

@@ -158,7 +158,7 @@ export default function InquiryPage() {
         )}
       </div>
 
-      <InquiryFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSave={addInquiry} products={products} />
+      <InquiryFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSave={addInquiry} products={products} inquiries={inquiries} />
       <InquiryFormDrawer open={Boolean(editing)} onClose={() => setEditing(null)} onSave={updateInquiry} products={products} editing={editing} />
       <InquiryDetailModal inquiry={viewing} onClose={() => setViewing(null)} />
     </div>

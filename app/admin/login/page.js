@@ -8,7 +8,7 @@ export default function AdminLoginPage() {
         role="admin"
         endpoint="/api/auth/admin"
         title="Admin sign in"
-        subtitle="Enter the admin password to manage medicine inventory."
+        subtitle="Enter the admin password to access MedTrack."
         fallbackPath="/admin"
       />
     </Suspense>
