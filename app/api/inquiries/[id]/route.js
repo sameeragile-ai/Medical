@@ -13,6 +13,40 @@ export async function PATCH(req, { params }) {
       await sql`UPDATE inquiries SET printed = true WHERE id = ${params.id}`;
     }
 
+    if (
+      body.receivedCash !== undefined ||
+      body.receivedOnline !== undefined ||
+      body.receivedCheque !== undefined
+    ) {
+      const existing = await sql`SELECT received_cash, received_online, received_cheque FROM inquiries WHERE id = ${params.id}`;
+      if (!existing[0]) return NextResponse.json({ error: "Inquiry not found." }, { status: 404 });
+
+      const receivedCash = body.receivedCash !== undefined ? !!body.receivedCash : existing[0].received_cash;
+      const receivedOnline = body.receivedOnline !== undefined ? !!body.receivedOnline : existing[0].received_online;
+      const receivedCheque = body.receivedCheque !== undefined ? !!body.receivedCheque : existing[0].received_cheque;
+      const anyReceived = receivedCash || receivedOnline || receivedCheque;
+
+      if (anyReceived) {
+        await sql`
+          UPDATE inquiries SET
+            received_cash = ${receivedCash},
+            received_online = ${receivedOnline},
+            received_cheque = ${receivedCheque},
+            received_at = COALESCE(received_at, now())
+          WHERE id = ${params.id}
+        `;
+      } else {
+        await sql`
+          UPDATE inquiries SET
+            received_cash = false,
+            received_online = false,
+            received_cheque = false,
+            received_at = NULL
+          WHERE id = ${params.id}
+        `;
+      }
+    }
+
     const rows = await sql`SELECT * FROM inquiries WHERE id = ${params.id}`;
     if (!rows[0]) return NextResponse.json({ error: "Inquiry not found." }, { status: 404 });
     return NextResponse.json(rows[0]);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pill, Users, Package, LogOut } from "lucide-react";
+import { Pill, Users, Package, LogOut, Truck, Wallet } from "lucide-react";
 
 export default function NavBar({ active }) {
   const router = useRouter();
@@ -36,6 +36,12 @@ export default function NavBar({ active }) {
             </Link>
             <Link href="/inquiry" className={`nav-link ${active === "inquiry" ? "active" : ""}`}>
               <Users size={15} /> Patient Inquiries
+            </Link>
+            <Link href="/inquiry/order-sheet" className={`nav-link ${active === "order-sheet" ? "active" : ""}`}>
+              <Truck size={15} /> Order Sheet
+            </Link>
+            <Link href="/inquiry/recovery-sheet" className={`nav-link ${active === "recovery-sheet" ? "active" : ""}`}>
+              <Wallet size={15} /> Recovery Sheet
             </Link>
           </nav>
           <button className="icon-btn" onClick={logout} title="Sign out">
