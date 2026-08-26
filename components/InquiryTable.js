@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Users, X, Pencil, Trash2 } from "lucide-react";
+import { Search, Users, X, Pencil, Trash2, Printer, Mail } from "lucide-react";
 import { Badge, EmptyState, SortHeader } from "./ui";
+import ColumnFilter from "./ColumnFilter";
+import ActionsMenu from "./ActionsMenu";
 import { fmtDate, fmtMoney } from "@/lib/format";
+import { printInquiryInvoice, printInquiriesInvoices, emailInquiryInvoice } from "@/lib/invoiceActions";
 
 const PAGE_SIZE = 8;
 
@@ -13,20 +16,74 @@ const FIELD_MAP = {
   value: "value",
 };
 
-export default function InquiryTable({ inquiries, onView, onEdit, onDelete }) {
+function productsLabel(r) {
+  if (Array.isArray(r.items) && r.items.length) {
+    return r.items.map((it) => `${it.productName} ×${it.qty}`).join("\n");
+  }
+  return r.product_name || "";
+}
+
+function contactsLabel(r) {
+  return [r.contact_primary, r.contact_alt1, r.contact_alt2].filter(Boolean).join("\n");
+}
+
+const COL_GETTERS = {
+  customer_name: (r) => r.customer_name || "",
+  care_of: (r) => r.care_of || "",
+  product_name: (r) => productsLabel(r),
+  address: (r) => r.address || "",
+  prescriber: (r) => r.prescriber || "",
+  contact: (r) => contactsLabel(r),
+  sales_rep: (r) => r.sales_rep || "",
+  dr_code: (r) => r.dr_code || "",
+  qty: (r) => String(r.qty ?? ""),
+  value: (r) => String(r.value ?? ""),
+  invoice: (r) => r.invoice || "",
+  date: (r) => fmtDate(r.date),
+  remarks: (r) => r.remarks || "",
+};
+
+const COL_KEYS = Object.keys(COL_GETTERS);
+const BLANK_COL_FILTERS = Object.fromEntries(COL_KEYS.map((k) => [k, null]));
+
+export default function InquiryTable({ inquiries, onEdit, onDelete, onPrinted }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
+  const [colFilters, setColFilters] = useState(BLANK_COL_FILTERS);
   const [sort, setSort] = useState({ field: "date", dir: "desc" });
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [selected, setSelected] = useState(() => new Set());
+
+  const colValues = useMemo(() => {
+    const out = {};
+    COL_KEYS.forEach((key) => {
+      out[key] = Array.from(new Set(inquiries.map((r) => COL_GETTERS[key](r)))).sort((a, b) => a.localeCompare(b));
+    });
+    return out;
+  }, [inquiries]);
+
+  const setColFilter = (key) => (next) => setColFilters((f) => ({ ...f, [key]: next }));
+  const clearColFilters = () => setColFilters(BLANK_COL_FILTERS);
+  const anyColFilter = Object.values(colFilters).some((v) => v !== null);
 
   const filtered = useMemo(() => {
+    const needle = q.toLowerCase();
     let rows = inquiries.filter(
       (r) =>
-        (r.customer_name || "").toLowerCase().includes(q.toLowerCase()) ||
-        (r.product_name || "").toLowerCase().includes(q.toLowerCase()) ||
-        (r.invoice || "").toLowerCase().includes(q.toLowerCase())
+        (r.customer_name || "").toLowerCase().includes(needle) ||
+        productsLabel(r).toLowerCase().includes(needle) ||
+        (r.invoice || "").toLowerCase().includes(needle) ||
+        (r.contact_primary || "").toLowerCase().includes(needle) ||
+        (r.contact_alt1 || "").toLowerCase().includes(needle) ||
+        (r.contact_alt2 || "").toLowerCase().includes(needle)
     );
     if (status !== "all") rows = rows.filter((r) => r.patient_status === status);
+
+    Object.entries(colFilters).forEach(([key, allowed]) => {
+      if (allowed === null) return;
+      rows = rows.filter((r) => allowed.includes(COL_GETTERS[key](r)));
+    });
+
     const field = FIELD_MAP[sort.field] || sort.field;
     rows = [...rows].sort((a, b) => {
       const dir = sort.dir === "asc" ? 1 : -1;
@@ -35,21 +92,66 @@ export default function InquiryTable({ inquiries, onView, onEdit, onDelete }) {
       return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
     });
     return rows;
-  }, [inquiries, q, status, sort]);
+  }, [inquiries, q, status, colFilters, sort]);
 
-  useEffect(() => setVisible(PAGE_SIZE), [q, status]);
+  useEffect(() => setVisible(PAGE_SIZE), [q, status, colFilters]);
 
   const onSort = (field) =>
     setSort((s) => ({ field, dir: s.field === field && s.dir === "asc" ? "desc" : "asc" }));
 
   const rows = filtered.slice(0, visible);
 
+  useEffect(() => {
+    const visibleIds = new Set(rows.map((r) => r.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  const toggleRow = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () =>
+    setSelected((prev) => {
+      if (allSelected) return new Set();
+      return new Set(rows.map((r) => r.id));
+    });
+
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+
+  const bulkPrint = () => {
+    if (!selectedRows.length) return;
+    printInquiriesInvoices(selectedRows);
+    onPrinted?.(selectedRows.map((r) => r.id));
+  };
+
+  const printRow = (r) => {
+    printInquiryInvoice(r);
+    onPrinted?.([r.id]);
+  };
+
+  const Th = ({ colKey, children, style }) => (
+    <th style={style}>
+      <span style={{ display: "inline-flex", alignItems: "center" }}>
+        {children}
+        <ColumnFilter values={colValues[colKey]} selected={colFilters[colKey]} onChange={setColFilter(colKey)} />
+      </span>
+    </th>
+  );
+
   return (
     <div className="card fade-in" style={{ overflow: "hidden" }}>
       <div style={{ padding: 18, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid var(--border-soft)" }}>
         <div style={{ position: "relative", flex: "1 1 220px" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted-2)" }} />
-          <input className="input" style={{ paddingLeft: 34, paddingRight: q ? 34 : 13 }} placeholder="Search customer, product, invoice…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input" style={{ paddingLeft: 34, paddingRight: q ? 34 : 13 }} placeholder="Search customer, product, invoice, contact…" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && (
             <button
               type="button"
@@ -62,12 +164,29 @@ export default function InquiryTable({ inquiries, onView, onEdit, onDelete }) {
           )}
         </div>
         <select className="select" style={{ width: "auto" }} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="all">All patients</option>
+          <option value="all">All patient types</option>
           <option value="New">New patient</option>
           <option value="Old">Old patient</option>
         </select>
         <Badge tone="neutral">{filtered.length} record{filtered.length !== 1 ? "s" : ""}</Badge>
+        {anyColFilter && (
+          <button type="button" className="btn btn-soft" style={{ padding: "6px 10px", fontSize: 12 }} onClick={clearColFilters}>
+            Clear column filters
+          </button>
+        )}
       </div>
+
+      {selected.size > 0 && (
+        <div style={{ padding: "10px 18px", display: "flex", gap: 10, alignItems: "center", borderBottom: "1px solid var(--border-soft)", background: "var(--surface-2, rgba(0,0,0,0.02))" }}>
+          <Badge tone="accent">{selected.size} selected</Badge>
+          <button type="button" className="btn btn-soft" style={{ padding: "6px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={bulkPrint}>
+            <Printer size={14} /> Bulk print
+          </button>
+          <button type="button" className="btn btn-soft" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => setSelected(new Set())}>
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState icon={Users} title="No inquiries found" sub="Try adjusting your search or filters." />
@@ -76,53 +195,75 @@ export default function InquiryTable({ inquiries, onView, onEdit, onDelete }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Invoice</th>
-                <SortHeader label="Date" field="date" sort={sort} onSort={onSort} />
-                <SortHeader label="Customer" field="customerName" sort={sort} onSort={onSort} />
+                <th style={{ width: 36 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all rows" />
+                </th>
+                <th><span style={{ display: "inline-flex", alignItems: "center" }}><SortHeader label="Customer" field="customerName" sort={sort} onSort={onSort} /><ColumnFilter values={colValues.customer_name} selected={colFilters.customer_name} onChange={setColFilter("customer_name")} /></span></th>
+                <Th colKey="care_of">Care of</Th>
+                <th>Patient type</th>
                 <th>Status</th>
-                <th>Product</th>
-                <th>Address</th>
-                <th>Prescriber</th>
-                <th>Dr. code</th>
-                <th>Contact 1</th>
-                <th>Contact 2</th>
-                <th>Contact 3</th>
-                <th>Sales rep</th>
-                <th>Qty</th>
-                <SortHeader label="Value" field="value" sort={sort} onSort={onSort} />
-                <th>Dosage (months)</th>
+                <Th colKey="product_name">Product</Th>
+                <Th colKey="address">Address</Th>
+                <Th colKey="prescriber">Prescriber</Th>
+                <Th colKey="contact">Contact</Th>
+                <Th colKey="sales_rep">Sales rep</Th>
+                <Th colKey="dr_code">Dr. code</Th>
+                <Th colKey="qty">Qty</Th>
+                <th><span style={{ display: "inline-flex", alignItems: "center" }}><SortHeader label="Value" field="value" sort={sort} onSort={onSort} /><ColumnFilter values={colValues.value} selected={colFilters.value} onChange={setColFilter("value")} /></span></th>
+                <Th colKey="invoice">Invoice</Th>
+                <th><span style={{ display: "inline-flex", alignItems: "center" }}><SortHeader label="Date" field="date" sort={sort} onSort={onSort} /><ColumnFilter values={colValues.date} selected={colFilters.date} onChange={setColFilter("date")} /></span></th>
                 <th>Image</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <Th colKey="remarks">Remarks</Th>
+                <th className="col-sticky-actions" style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="font-mono" style={{ color: "var(--primary-dark)", fontWeight: 600, whiteSpace: "nowrap" }}>{r.invoice}</td>
-                  <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
+                  <td>
+                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} aria-label={`Select ${r.customer_name}`} />
+                  </td>
                   <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{r.customer_name}</td>
-                  <td><Badge tone={r.patient_status === "New" ? "accent" : "success"}>{r.patient_status}</Badge></td>
-                  <td style={{ whiteSpace: "nowrap" }}>{r.product_name}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{r.care_of || "—"}</td>
+                  <td>
+                    <Badge tone={r.patient_status === "New" ? "accent" : "success"}>{r.patient_status}</Badge>
+                  </td>
+                  <td>
+                    <Badge tone={r.printed ? "neutral" : "accent"}>{r.printed ? "Printed" : "Pending"}</Badge>
+                  </td>
+                  <td style={{ whiteSpace: "pre-line" }}>{productsLabel(r) || "—"}</td>
                   <td style={{ maxWidth: 220, whiteSpace: "normal" }}>{r.address || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{r.prescriber || "—"}</td>
-                  <td className="font-mono" style={{ whiteSpace: "nowrap" }}>{r.dr_code || "—"}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{r.contact_primary || "—"}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{r.contact_alt1 || "—"}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{r.contact_alt2 || "—"}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>{contactsLabel(r) || "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{r.sales_rep || "—"}</td>
+                  <td className="font-mono" style={{ whiteSpace: "nowrap" }}>{r.dr_code || "—"}</td>
                   <td className="font-mono">{r.qty}</td>
                   <td className="font-mono">{fmtMoney(r.value)}</td>
-                  <td className="font-mono">{r.dosage_months}</td>
+                  <td className="font-mono" style={{ color: "var(--primary-dark)", fontWeight: 600, whiteSpace: "nowrap" }}>{r.invoice}</td>
+                  <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
                   <td>
                     {r.image_data ? (
                       <img src={r.image_data} alt="Prescription" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
                     ) : "—"}
                   </td>
-                  <td style={{ textAlign: "right" }}>
+                  <td style={{ maxWidth: 200, whiteSpace: "normal", color: "var(--muted)" }}>{r.remarks || "—"}</td>
+                  <td className="col-sticky-actions" style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", gap: 6 }}>
-                      <button className="icon-btn" onClick={() => onView(r)} title="View details"><Eye size={14} /></button>
-                      <button className="icon-btn" onClick={() => onEdit(r)} title="Edit inquiry"><Pencil size={14} /></button>
-                      <button className="icon-btn" onClick={() => onDelete(r)} title="Delete inquiry"><Trash2 size={14} /></button>
+                      <button className="icon-btn" onClick={() => printRow(r)} title="Print invoice"><Printer size={14} /></button>
+                      <ActionsMenu
+                        items={[
+                          { label: "Email invoice", icon: Mail, onClick: () => emailInquiryInvoice(r) },
+                          null,
+                          {
+                            label: "Edit inquiry", icon: Pencil, onClick: () => onEdit(r),
+                            disabled: r.printed, disabledReason: "Printed invoices can't be edited",
+                          },
+                          {
+                            label: "Delete inquiry", icon: Trash2, onClick: () => onDelete(r), danger: true,
+                            disabled: r.printed, disabledReason: "Printed invoices can't be deleted",
+                          },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>

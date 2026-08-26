@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { X, Plus, AlertTriangle, Upload, FileText, Calendar, MapPin, Stethoscope, Phone, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X, Plus, AlertTriangle, Upload, FileText, Calendar, MapPin, Stethoscope, Phone, Loader2, Search, Minus } from "lucide-react";
 import { FieldLabel } from "./ui";
-import { fmtDate, todayISO } from "@/lib/format";
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
+import { focusNextOnEnter } from "@/lib/focusNav";
+import {
+  sanitizeName,
+  sanitizePhone,
+  sanitizeCode,
+  validateName,
+  validatePhone,
+} from "@/lib/validate";
 
 const blankForm = () => ({
   customerName: "",
+  careOf: "",
   patientStatus: "New",
-  productId: "",
-  productName: "",
   address: "",
   prescriber: "",
   drCode: "",
@@ -17,18 +24,139 @@ const blankForm = () => ({
   contactAlt1: "",
   contactAlt2: "",
   salesRep: "",
-  qty: 1,
-  value: 0,
-  dosageMonths: 1,
+  remarks: "",
   imageData: null,
 });
 
+function FieldError({ msg }) {
+  if (!msg) return null;
+  return <div style={{ color: "var(--danger)", fontSize: 11.5, marginTop: 4 }}>{msg}</div>;
+}
+
+function itemsFromEditing(editing, products) {
+  if (Array.isArray(editing?.items) && editing.items.length) {
+    return editing.items.map((it) => ({
+      productId: it.productId,
+      productName: it.productName,
+      qty: Number(it.qty) || 0,
+      price: Number(it.price) || 0,
+      amount: Number(it.amount) || 0,
+    }));
+  }
+  if (editing?.product_id) {
+    const prod = products.find((p) => p.id === editing.product_id);
+    const price = prod ? Number(prod.price) : Number(editing.value || 0) / (Number(editing.qty) || 1);
+    const qty = Number(editing.qty) || 1;
+    return [{ productId: editing.product_id, productName: editing.product_name || (prod && prod.name) || "", qty, price, amount: qty * price }];
+  }
+  return [];
+}
+
+// Searchable product picker: type to filter, click to add as a chip.
+function ProductPicker({ products, items, onAdd }) {
+  const [term, setTerm] = useState("");
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  const addedIds = new Set(items.map((i) => i.productId));
+  const matches = useMemo(() => {
+    const needle = term.trim().toLowerCase();
+    return products
+      .filter((p) => !addedIds.has(p.id))
+      .filter((p) => !needle || p.name.toLowerCase().includes(needle) || (p.brand || "").toLowerCase().includes(needle))
+      .slice(0, 8);
+  }, [products, term, items]);
+
+  return (
+    <div style={{ position: "relative" }} ref={boxRef}>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--muted-2)" }} />
+        <input
+          className="input"
+          style={{ paddingLeft: 30 }}
+          placeholder="Search medicines to add…"
+          value={term}
+          onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && matches[0]) {
+              e.preventDefault();
+              onAdd(matches[0]);
+              setTerm("");
+            }
+          }}
+        />
+      </div>
+      {open && matches.length > 0 && (
+        <div
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5,
+            background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10,
+            boxShadow: "0 10px 24px -8px rgba(16,27,34,0.25)", maxHeight: 220, overflowY: "auto",
+          }}
+        >
+          {matches.map((p) => (
+            <div
+              key={p.id}
+              onMouseDown={(e) => { e.preventDefault(); onAdd(p); setTerm(""); }}
+              style={{ padding: "9px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 }}
+              className="dropdown-row"
+            >
+              <span style={{ fontWeight: 600 }}>{p.name}{p.brand ? ` · ${p.brand}` : ""}</span>
+              <span className="font-mono" style={{ color: "var(--muted)" }}>{fmtMoney(p.price)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && term && matches.length === 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--muted)" }}>
+          No matching medicine.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One selected product shown as a chip with an editable quantity and computed amount.
+function ProductChip({ item, onQtyChange, onRemove }) {
+  return (
+    <div
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+        border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface-alt)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.productName}</div>
+        <div className="font-mono" style={{ fontSize: 11.5, color: "var(--muted)" }}>{fmtMoney(item.price)} each</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <button type="button" className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => onQtyChange(Math.max(1, item.qty - 1))}><Minus size={12} /></button>
+        <input
+          type="number"
+          min="1"
+          value={item.qty}
+          onChange={(e) => onQtyChange(Math.max(1, Number(e.target.value) || 1))}
+          style={{ width: 44, textAlign: "center", padding: "4px 2px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "inherit", fontSize: 12.5 }}
+        />
+        <button type="button" className="icon-btn" style={{ width: 24, height: 24 }} onClick={() => onQtyChange(item.qty + 1)}><Plus size={12} /></button>
+      </div>
+      <div className="font-mono" style={{ fontSize: 13, fontWeight: 700, minWidth: 70, textAlign: "right" }}>{fmtMoney(item.amount)}</div>
+      <button type="button" className="icon-btn" style={{ width: 24, height: 24 }} onClick={onRemove}><X size={13} /></button>
+    </div>
+  );
+}
+
 export default function InquiryFormDrawer({ open, onClose, onSave, products, editing }) {
   const [form, setForm] = useState(blankForm());
+  const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [imgPreview, setImgPreview] = useState(null);
   const fileRef = useRef(null);
+  const drawerRef = useRef(null);
   const today = todayISO();
   const isEdit = Boolean(editing);
 
@@ -38,9 +166,8 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
         editing
           ? {
               customerName: editing.customer_name || "",
+              careOf: editing.care_of || "",
               patientStatus: editing.patient_status || "New",
-              productId: editing.product_id || "",
-              productName: editing.product_name || "",
               address: editing.address || "",
               prescriber: editing.prescriber || "",
               drCode: editing.dr_code || "",
@@ -48,14 +175,14 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
               contactAlt1: editing.contact_alt1 || "",
               contactAlt2: editing.contact_alt2 || "",
               salesRep: editing.sales_rep || "",
-              qty: editing.qty ?? 1,
-              value: editing.value ?? 0,
-              dosageMonths: editing.dosage_months ?? 1,
+              remarks: editing.remarks || "",
               imageData: editing.image_data || null,
             }
           : blankForm()
       );
+      setItems(itemsFromEditing(editing, products));
       setError("");
+      setFieldErrors({});
       setImgPreview(editing ? editing.image_data || null : null);
       setSaving(false);
     }
@@ -65,22 +192,56 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const onProductChange = (e) => {
-    const pid = e.target.value;
-    const prod = products.find((p) => p.id === pid);
-    setForm((f) => ({
-      ...f,
-      productId: pid,
-      productName: prod ? prod.name : "",
-      value: prod ? Number(prod.price) * Number(f.qty || 1) : f.value,
-    }));
+  const setSanitized = (k, sanitize) => (e) => {
+    const value = sanitize(e.target.value);
+    setForm((f) => ({ ...f, [k]: value }));
+    setFieldErrors((fe) => ({ ...fe, [k]: "" }));
   };
 
-  const onQtyChange = (e) => {
-    const qty = e.target.value;
-    const prod = products.find((p) => p.id === form.productId);
-    setForm((f) => ({ ...f, qty, value: prod ? Number(prod.price) * Number(qty || 0) : f.value }));
+  const FIELD_VALIDATORS = {
+    customerName: () => validateName(form.customerName, "Customer name", true),
+    careOf: () => validateName(form.careOf, "Care of / patient representative name", false),
+    prescriber: () => validateName(form.prescriber, "Prescriber name", false),
+    salesRep: () => validateName(form.salesRep, "Sales representative", false),
+    drCode: () => (form.drCode && !/^[A-Za-z0-9\-\s]*$/.test(form.drCode) ? "Dr. code can only contain letters, numbers and dashes." : ""),
+    contactPrimary: () => validatePhone(form.contactPrimary, "Primary contact number", true),
+    contactAlt1: () => validatePhone(form.contactAlt1, "Alternate contact 1", false),
+    contactAlt2: () => validatePhone(form.contactAlt2, "Alternate contact 2", false),
   };
+
+  const validateAll = () => {
+    const errs = {};
+    Object.keys(FIELD_VALIDATORS).forEach((k) => {
+      const msg = FIELD_VALIDATORS[k]();
+      if (msg) errs[k] = msg;
+    });
+    if (items.length === 0) errs.items = "Please add at least one product.";
+    setFieldErrors(errs);
+    return errs;
+  };
+
+  const validateOne = (k) => () => {
+    const validator = FIELD_VALIDATORS[k];
+    if (!validator) return;
+    setFieldErrors((fe) => ({ ...fe, [k]: validator() }));
+  };
+
+  const addItem = (product) => {
+    setItems((prev) => {
+      if (prev.some((i) => i.productId === product.id)) return prev;
+      const price = Number(product.price) || 0;
+      return [...prev, { productId: product.id, productName: product.name, qty: 1, price, amount: price }];
+    });
+    setFieldErrors((fe) => ({ ...fe, items: "" }));
+  };
+
+  const removeItem = (productId) => setItems((prev) => prev.filter((i) => i.productId !== productId));
+
+  const setItemQty = (productId, qty) =>
+    setItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty, amount: qty * i.price } : i)));
+
+  const totalQty = items.reduce((sum, i) => sum + i.qty, 0);
+  const totalValue = items.reduce((sum, i) => sum + i.amount, 0);
 
   const onFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -94,25 +255,27 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
   };
 
   const submit = async () => {
-    if (!form.customerName.trim()) return setError("Customer name is required.");
-    if (!form.productId) return setError("Please select a product.");
-    if (!form.contactPrimary.trim()) return setError("Primary contact number is required.");
+    const errs = validateAll();
+    const firstError = Object.values(errs)[0];
+    if (firstError) return setError(firstError);
     setSaving(true);
     setError("");
     const ok = await onSave({
       ...form,
-      qty: Number(form.qty || 0),
-      value: Number(form.value || 0),
-      dosageMonths: Number(form.dosageMonths || 0),
+      items,
+      qty: totalQty,
+      value: totalValue,
     });
     setSaving(false);
     if (!ok) setError("Something went wrong recording this inquiry. Please try again.");
   };
 
+  const onEnter = (e) => focusNextOnEnter(e, drawerRef, submit);
+
   return (
     <>
       <div className="overlay fade-in" onClick={onClose} />
-      <div className="drawer" style={{ maxWidth: 540 }}>
+      <div className="drawer" style={{ maxWidth: 540 }} ref={drawerRef}>
         <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border-soft)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? "Edit patient inquiry" : "New patient inquiry"}</div>
@@ -129,79 +292,158 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
 
           <div style={{ marginBottom: 16 }}>
             <FieldLabel required>Customer name</FieldLabel>
-            <input className="input" placeholder="Full name" value={form.customerName} onChange={set("customerName")} autoFocus />
+            <input
+              className="input"
+              placeholder="Full name"
+              value={form.customerName}
+              onChange={setSanitized("customerName", sanitizeName)}
+              onBlur={validateOne("customerName")}
+              onKeyDown={onEnter}
+              autoFocus
+            />
+            <FieldError msg={fieldErrors.customerName} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-            <div>
-              <FieldLabel required>Patient status</FieldLabel>
-              <select className="select" value={form.patientStatus} onChange={set("patientStatus")}>
-                <option value="New">New patient</option>
-                <option value="Old">Old patient</option>
-              </select>
-            </div>
-            <div>
-              <FieldLabel required>Product</FieldLabel>
-              {products.length === 0 ? (
-                <select className="select" disabled><option>No medicines in stock yet</option></select>
-              ) : (
-                <select className="select" value={form.productId} onChange={onProductChange}>
-                  <option value="">Select product…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}{Number(p.dosage) ? ` (${Number(p.dosage)}mg)` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+          <div style={{ marginBottom: 16 }}>
+            <FieldLabel>Care of / patient representative name</FieldLabel>
+            <input
+              className="input"
+              placeholder="Representative or caretaker name"
+              value={form.careOf}
+              onChange={setSanitized("careOf", sanitizeName)}
+              onBlur={validateOne("careOf")}
+              onKeyDown={onEnter}
+            />
+            <FieldError msg={fieldErrors.careOf} />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <FieldLabel required>Patient status</FieldLabel>
+            <select className="select" value={form.patientStatus} onChange={set("patientStatus")} onKeyDown={onEnter}>
+              <option value="New">New patient</option>
+              <option value="Old">Old patient</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <FieldLabel required>Products</FieldLabel>
+            {products.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No medicines in stock yet.</div>
+            ) : (
+              <ProductPicker products={products} items={items} onAdd={addItem} />
+            )}
+            <FieldError msg={fieldErrors.items} />
+
+            {items.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                {items.map((item) => (
+                  <ProductChip
+                    key={item.productId}
+                    item={item}
+                    onQtyChange={(qty) => setItemQty(item.productId, qty)}
+                    onRemove={() => removeItem(item.productId)}
+                  />
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", fontSize: 12.5, fontWeight: 700, color: "var(--muted)" }}>
+                  <span>Total qty: {totalQty}</span>
+                  <span className="font-mono">{fmtMoney(totalValue)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <FieldLabel><MapPin size={12} style={{ display: "inline", marginRight: 2 }} />Complete address</FieldLabel>
-            <textarea className="textarea" placeholder="House / street / area / city" value={form.address} onChange={set("address")} />
+            <textarea className="textarea" placeholder="House / street / area / city" value={form.address} onChange={set("address")} onKeyDown={onEnter} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
             <div>
               <FieldLabel><Stethoscope size={12} style={{ display: "inline", marginRight: 2 }} />Prescriber (Dr. name)</FieldLabel>
-              <input className="input" placeholder="Dr. Full Name" value={form.prescriber} onChange={set("prescriber")} />
+              <input
+                className="input"
+                placeholder="Dr. Full Name"
+                value={form.prescriber}
+                onChange={setSanitized("prescriber", sanitizeName)}
+                onBlur={validateOne("prescriber")}
+                onKeyDown={onEnter}
+              />
+              <FieldError msg={fieldErrors.prescriber} />
             </div>
             <div>
               <FieldLabel>Dr. code</FieldLabel>
-              <input className="input" placeholder="DR-0000" value={form.drCode} onChange={set("drCode")} />
+              <input
+                className="input"
+                placeholder="DR-0000"
+                value={form.drCode}
+                onChange={setSanitized("drCode", sanitizeCode)}
+                onBlur={validateOne("drCode")}
+                onKeyDown={onEnter}
+              />
+              <FieldError msg={fieldErrors.drCode} />
             </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <FieldLabel required><Phone size={12} style={{ display: "inline", marginRight: 2 }} />Contact numbers</FieldLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input className="input" placeholder="Primary contact" value={form.contactPrimary} onChange={set("contactPrimary")} />
+              <div>
+                <input
+                  className="input"
+                  placeholder="Primary contact"
+                  value={form.contactPrimary}
+                  onChange={setSanitized("contactPrimary", sanitizePhone)}
+                  onBlur={validateOne("contactPrimary")}
+                  onKeyDown={onEnter}
+                  inputMode="tel"
+                />
+                <FieldError msg={fieldErrors.contactPrimary} />
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <input className="input" placeholder="Alternate 1 (optional)" value={form.contactAlt1} onChange={set("contactAlt1")} />
-                <input className="input" placeholder="Alternate 2 (optional)" value={form.contactAlt2} onChange={set("contactAlt2")} />
+                <div>
+                  <input
+                    className="input"
+                    placeholder="Alternate 1 (optional)"
+                    value={form.contactAlt1}
+                    onChange={setSanitized("contactAlt1", sanitizePhone)}
+                    onBlur={validateOne("contactAlt1")}
+                    onKeyDown={onEnter}
+                    inputMode="tel"
+                  />
+                  <FieldError msg={fieldErrors.contactAlt1} />
+                </div>
+                <div>
+                  <input
+                    className="input"
+                    placeholder="Alternate 2 (optional)"
+                    value={form.contactAlt2}
+                    onChange={setSanitized("contactAlt2", sanitizePhone)}
+                    onBlur={validateOne("contactAlt2")}
+                    onKeyDown={onEnter}
+                    inputMode="tel"
+                  />
+                  <FieldError msg={fieldErrors.contactAlt2} />
+                </div>
               </div>
             </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <FieldLabel>Sales representative</FieldLabel>
-            <input className="input" placeholder="Representative name" value={form.salesRep} onChange={set("salesRep")} />
+            <input
+              className="input"
+              placeholder="Representative name"
+              value={form.salesRep}
+              onChange={setSanitized("salesRep", sanitizeName)}
+              onBlur={validateOne("salesRep")}
+              onKeyDown={onEnter}
+            />
+            <FieldError msg={fieldErrors.salesRep} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 16 }}>
-            <div>
-              <FieldLabel>Product qty</FieldLabel>
-              <input className="input" type="number" min="0" value={form.qty} onChange={onQtyChange} />
-            </div>
-            <div>
-              <FieldLabel>Value (Rs.)</FieldLabel>
-              <input className="input" type="number" min="0" value={form.value} onChange={set("value")} />
-            </div>
-            <div>
-              <FieldLabel>Dosage (months)</FieldLabel>
-              <input className="input" type="number" min="0" value={form.dosageMonths} onChange={set("dosageMonths")} />
-            </div>
+          <div style={{ marginBottom: 16 }}>
+            <FieldLabel>Remarks / comments</FieldLabel>
+            <textarea className="textarea" placeholder="Any additional notes" value={form.remarks} onChange={set("remarks")} onKeyDown={onEnter} />
           </div>
 
           <div style={{ marginBottom: 8 }}>

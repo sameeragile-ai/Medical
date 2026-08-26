@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { sql, ensureTables } from "@/lib/db";
+import { normalizeItems, itemsTotals } from "@/lib/inquiryItems";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +32,15 @@ export async function POST(req) {
     if (!body.customerName || !String(body.customerName).trim()) {
       return NextResponse.json({ error: "Customer name is required." }, { status: 400 });
     }
-    if (!body.productId) {
-      return NextResponse.json({ error: "Please select a product." }, { status: 400 });
+    const items = normalizeItems(body.items);
+    if (items.length === 0) {
+      return NextResponse.json({ error: "Please add at least one product." }, { status: 400 });
     }
     if (!body.contactPrimary || !String(body.contactPrimary).trim()) {
       return NextResponse.json({ error: "Primary contact number is required." }, { status: 400 });
     }
 
+    const { qty, value, productName, productId } = itemsTotals(items);
     const countRes = await sql`SELECT COUNT(*)::int AS c FROM inquiries`;
     const invoice = genInvoice((countRes[0]?.c || 0) + 1);
     const id = randomUUID();
@@ -45,16 +48,16 @@ export async function POST(req) {
 
     await sql`
       INSERT INTO inquiries (
-        id, invoice, date, customer_name, patient_status, product_id, product_name,
+        id, invoice, date, customer_name, care_of, patient_status, product_id, product_name,
         address, prescriber, dr_code, contact_primary, contact_alt1, contact_alt2,
-        sales_rep, qty, value, dosage_months, image_data
+        sales_rep, qty, value, items, remarks, image_data
       ) VALUES (
-        ${id}, ${invoice}, ${date}, ${String(body.customerName).trim()}, ${body.patientStatus || "New"},
-        ${body.productId}, ${body.productName || null},
+        ${id}, ${invoice}, ${date}, ${String(body.customerName).trim()}, ${body.careOf || null}, ${body.patientStatus || "New"},
+        ${productId}, ${productName || null},
         ${body.address || null}, ${body.prescriber || null}, ${body.drCode || null},
         ${String(body.contactPrimary).trim()}, ${body.contactAlt1 || null}, ${body.contactAlt2 || null},
-        ${body.salesRep || null}, ${Number(body.qty) || 0}, ${Number(body.value) || 0},
-        ${Number(body.dosageMonths) || 0}, ${body.imageData || null}
+        ${body.salesRep || null}, ${qty}, ${value},
+        ${JSON.stringify(items)}::jsonb, ${body.remarks || null}, ${body.imageData || null}
       )
     `;
 

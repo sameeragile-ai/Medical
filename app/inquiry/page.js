@@ -65,7 +65,11 @@ export default function InquiryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        if (err?.error) pushToast(err.error);
+        return false;
+      }
       const updated = await res.json();
       setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
       setEditing(null);
@@ -77,6 +81,10 @@ export default function InquiryPage() {
   };
 
   const deleteInquiry = async (inquiry) => {
+    if (inquiry.printed) {
+      pushToast("This invoice has already been printed and can no longer be deleted.");
+      return;
+    }
     if (!window.confirm(`Delete inquiry ${inquiry.invoice}? This cannot be undone.`)) return;
     setInquiries((prev) => prev.filter((i) => i.id !== inquiry.id));
     try {
@@ -86,6 +94,23 @@ export default function InquiryPage() {
     } catch {
       pushToast("Couldn't delete — please refresh and try again.");
       load();
+    }
+  };
+
+  const markPrinted = async (ids) => {
+    setInquiries((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, printed: true } : i)));
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/inquiries/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ printed: true }),
+          })
+        )
+      );
+    } catch {
+      pushToast("Couldn't update printed status — please refresh.");
     }
   };
 
@@ -117,7 +142,19 @@ export default function InquiryPage() {
             <Loader2 size={20} className="animate-spin" color="var(--primary)" />
           </div>
         ) : (
-          <InquiryTable inquiries={inquiries} onView={setViewing} onEdit={setEditing} onDelete={deleteInquiry} />
+          <InquiryTable
+            inquiries={inquiries}
+            onView={setViewing}
+            onEdit={(r) => {
+              if (r.printed) {
+                pushToast("This invoice has already been printed and can no longer be edited.");
+                return;
+              }
+              setEditing(r);
+            }}
+            onDelete={deleteInquiry}
+            onPrinted={markPrinted}
+          />
         )}
       </div>
 
