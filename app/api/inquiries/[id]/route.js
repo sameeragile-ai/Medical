@@ -93,6 +93,7 @@ export async function PUT(req, { params }) {
         address = ${body.address || null},
         prescriber = ${body.prescriber || null},
         dr_code = ${body.drCode || null},
+        brick_territory = ${body.brickTerritory || null},
         contact_primary = ${String(body.contactPrimary).trim()},
         contact_alt1 = ${body.contactAlt1 || null},
         contact_alt2 = ${body.contactAlt2 || null},

@@ -20,6 +20,7 @@ const blankForm = () => ({
   address: "",
   prescriber: "",
   drCode: "",
+  brickTerritory: "",
   contactPrimary: "",
   contactAlt1: "",
   contactAlt2: "",
@@ -252,6 +253,7 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
               address: editing.address || "",
               prescriber: editing.prescriber || "",
               drCode: editing.dr_code || "",
+              brickTerritory: editing.brick_territory || "",
               contactPrimary: editing.contact_primary || "",
               contactAlt1: editing.contact_alt1 || "",
               contactAlt2: editing.contact_alt2 || "",
@@ -325,6 +327,7 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
       address: past.address || "",
       prescriber: past.prescriber || "",
       drCode: past.dr_code || "",
+      brickTerritory: past.brick_territory || "",
       contactPrimary: past.contact_primary || "",
       contactAlt1: past.contact_alt1 || "",
       contactAlt2: past.contact_alt2 || "",
@@ -482,6 +485,17 @@ export default function InquiryFormDrawer({ open, onClose, onSave, products, edi
               />
               <FieldError msg={fieldErrors.drCode} />
             </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <FieldLabel>Brick (territory)</FieldLabel>
+            <input
+              className="input"
+              placeholder="Territory name"
+              value={form.brickTerritory}
+              onChange={set("brickTerritory")}
+              onKeyDown={onEnter}
+            />
           </div>
 
           <div style={{ marginBottom: 16 }}>

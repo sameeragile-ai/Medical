@@ -27,7 +27,10 @@ export default function InquiryPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [iRes, pRes] = await Promise.all([fetch("/api/inquiries"), fetch("/api/products")]);
+      const [iRes, pRes] = await Promise.all([
+        fetch("/api/inquiries"),
+        fetch("/api/products"),
+      ]);
       const [iData, pData] = await Promise.all([iRes.json(), pRes.json()]);
       setInquiries(Array.isArray(iData) ? iData : []);
       setProducts(Array.isArray(pData) ? pData : []);
@@ -38,7 +41,9 @@ export default function InquiryPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const addInquiry = async (payload) => {
     try {
@@ -71,7 +76,9 @@ export default function InquiryPage() {
         return false;
       }
       const updated = await res.json();
-      setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setInquiries((prev) =>
+        prev.map((i) => (i.id === updated.id ? updated : i)),
+      );
       setEditing(null);
       pushToast(`Inquiry updated — ${updated.invoice}`);
       return true;
@@ -82,13 +89,22 @@ export default function InquiryPage() {
 
   const deleteInquiry = async (inquiry) => {
     if (inquiry.printed) {
-      pushToast("This invoice has already been printed and can no longer be deleted.");
+      pushToast(
+        "This invoice has already been printed and can no longer be deleted.",
+      );
       return;
     }
-    if (!window.confirm(`Delete inquiry ${inquiry.invoice}? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete inquiry ${inquiry.invoice}? This cannot be undone.`,
+      )
+    )
+      return;
     setInquiries((prev) => prev.filter((i) => i.id !== inquiry.id));
     try {
-      const res = await fetch(`/api/inquiries/${inquiry.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/inquiries/${inquiry.id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error();
       pushToast(`Inquiry deleted — ${inquiry.invoice}`);
     } catch {
@@ -98,7 +114,9 @@ export default function InquiryPage() {
   };
 
   const markPrinted = async (ids) => {
-    setInquiries((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, printed: true } : i)));
+    setInquiries((prev) =>
+      prev.map((i) => (ids.includes(i.id) ? { ...i, printed: true } : i)),
+    );
     try {
       await Promise.all(
         ids.map((id) =>
@@ -106,40 +124,86 @@ export default function InquiryPage() {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ printed: true }),
-          })
-        )
+          }),
+        ),
       );
     } catch {
       pushToast("Couldn't update printed status — please refresh.");
     }
   };
 
-  const todayCount = inquiries.filter((i) => (i.date || "").slice(0, 10) === todayISO()).length;
+  const todayCount = inquiries.filter(
+    (i) => (i.date || "").slice(0, 10) === todayISO(),
+  ).length;
 
   return (
     <div style={{ paddingBottom: 60 }}>
       <ToastStack toasts={toasts} />
       <NavBar active="inquiry" />
 
-      <div style={{ maxWidth: 1180, margin: "20px auto 0", padding: "0 24px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
-        <StatCard icon={Users} label="Total inquiries" value={loading ? "…" : inquiries.length} delay={40} />
-        <StatCard icon={TrendingUp} label="Inquiries today" value={loading ? "…" : todayCount} delay={100} />
+      <div
+        style={{
+          maxWidth: 1180,
+          margin: "20px auto 0",
+          padding: "0 24px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 14,
+        }}
+      >
+        <StatCard
+          icon={Users}
+          label="Total inquiries"
+          value={loading ? "…" : inquiries.length}
+          delay={40}
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Inquiries today"
+          value={loading ? "…" : todayCount}
+          delay={100}
+        />
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "26px auto 16px", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+      <div
+        style={{
+          maxWidth: 1180,
+          margin: "26px auto 16px",
+          padding: "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 14,
+        }}
+      >
         <div>
-          <div className="font-display" style={{ fontSize: 20, fontWeight: 700 }}>Patient inquiries</div>
-          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>Inquiry desk — log prescription-based sales</div>
+          <div
+            className="font-display"
+            style={{ fontSize: 20, fontWeight: 700 }}
+          >
+            Patient inquiries
+          </div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
+            Inquiry desk — log prescription-based sales
+          </div>
         </div>
         <button className="btn btn-primary" onClick={() => setDrawerOpen(true)}>
-          <Plus size={15} /> New inquiry
+          <Plus size={15} /> Customer Entry
         </button>
       </div>
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px" }}>
         {loading ? (
-          <div className="card" style={{ padding: 60, display: "flex", justifyContent: "center" }}>
-            <Loader2 size={20} className="animate-spin" color="var(--primary)" />
+          <div
+            className="card"
+            style={{ padding: 60, display: "flex", justifyContent: "center" }}
+          >
+            <Loader2
+              size={20}
+              className="animate-spin"
+              color="var(--primary)"
+            />
           </div>
         ) : (
           <InquiryTable
@@ -147,7 +211,9 @@ export default function InquiryPage() {
             onView={setViewing}
             onEdit={(r) => {
               if (r.printed) {
-                pushToast("This invoice has already been printed and can no longer be edited.");
+                pushToast(
+                  "This invoice has already been printed and can no longer be edited.",
+                );
                 return;
               }
               setEditing(r);
@@ -158,8 +224,20 @@ export default function InquiryPage() {
         )}
       </div>
 
-      <InquiryFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSave={addInquiry} products={products} inquiries={inquiries} />
-      <InquiryFormDrawer open={Boolean(editing)} onClose={() => setEditing(null)} onSave={updateInquiry} products={products} editing={editing} />
+      <InquiryFormDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onSave={addInquiry}
+        products={products}
+        inquiries={inquiries}
+      />
+      <InquiryFormDrawer
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        onSave={updateInquiry}
+        products={products}
+        editing={editing}
+      />
       <InquiryDetailModal inquiry={viewing} onClose={() => setViewing(null)} />
     </div>
   );

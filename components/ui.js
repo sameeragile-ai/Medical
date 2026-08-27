@@ -46,20 +46,18 @@ export function EmptyState({ icon: Icon, title, sub }) {
 export function SortHeader({ label, field, sort, onSort }) {
   const active = sort.field === field;
   return (
-    <th>
-      <span
-        className="th-sort"
-        onClick={() => onSort(field)}
-        style={{ color: active ? "var(--primary-dark)" : undefined }}
-      >
-        {label}
-        {active ? (
-          sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-        ) : (
-          <ArrowUpDown size={12} style={{ opacity: 0.4 }} />
-        )}
-      </span>
-    </th>
+    <span
+      className="th-sort"
+      onClick={() => onSort(field)}
+      style={{ color: active ? "var(--primary-dark)" : undefined }}
+    >
+      {label}
+      {active ? (
+        sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+      ) : (
+        <ArrowUpDown size={12} style={{ opacity: 0.4 }} />
+      )}
+    </span>
   );
 }
 

@@ -49,12 +49,12 @@ export async function POST(req) {
     await sql`
       INSERT INTO inquiries (
         id, invoice, date, customer_name, care_of, patient_status, product_id, product_name,
-        address, prescriber, dr_code, contact_primary, contact_alt1, contact_alt2,
+        address, prescriber, dr_code, brick_territory, contact_primary, contact_alt1, contact_alt2,
         sales_rep, qty, value, items, remarks, image_data
       ) VALUES (
         ${id}, ${invoice}, ${date}, ${String(body.customerName).trim()}, ${body.careOf || null}, ${body.patientStatus || "New"},
         ${productId}, ${productName || null},
-        ${body.address || null}, ${body.prescriber || null}, ${body.drCode || null},
+        ${body.address || null}, ${body.prescriber || null}, ${body.drCode || null}, ${body.brickTerritory || null},
         ${String(body.contactPrimary).trim()}, ${body.contactAlt1 || null}, ${body.contactAlt2 || null},
         ${body.salesRep || null}, ${qty}, ${value},
         ${JSON.stringify(items)}::jsonb, ${body.remarks || null}, ${body.imageData || null}

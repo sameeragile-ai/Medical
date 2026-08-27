@@ -65,6 +65,7 @@ export default function InquiryDetailModal({ inquiry, onClose }) {
           <Row label="Total value" value={fmtMoney(inquiry.value)} />
           <Row label="Prescriber" value={inquiry.prescriber} />
           <Row label="Dr. code" value={inquiry.dr_code} mono />
+          <Row label="Brick (territory)" value={inquiry.brick_territory} />
           <Row label="Sales representative" value={inquiry.sales_rep} />
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--border-soft)" }}>
             <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Contact number(s)</span>

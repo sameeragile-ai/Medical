@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Wallet, Loader2 } from "lucide-react";
+import { Wallet, Loader2, Printer } from "lucide-react";
 import NavBar from "@/components/NavBar";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
+import { printRecoverySheet } from "@/lib/invoiceActions";
 
 function startOfWeekISO() {
   const d = new Date();
@@ -90,6 +91,18 @@ export default function RecoverySheetPage() {
           <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
           <span style={{ color: "var(--muted)", fontSize: 13 }}>to</span>
           <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <button
+            className="btn btn-primary"
+            disabled={!recovered.length}
+            onClick={() =>
+              printRecoverySheet(
+                from === to ? fmtDate(from) : `${fmtDate(from)} to ${fmtDate(to)}`,
+                recovered
+              )
+            }
+          >
+            <Printer size={15} /> Print recovery sheet
+          </button>
         </div>
       </div>
 
